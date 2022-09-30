@@ -1,0 +1,113 @@
+#include <RTClib.h>
+#define BLYNK_PRINT Serial
+#include "EmonLib.h"
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <LiquidCrystal_I2C.h>
+#define vCalibration 210
+#define currCalibration 9.5
+#define microSec_to_sec 1000000  //Conversion factor for microseconds to seconds
+#define Sleep_time 3
+LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27
+EnergyMonitor emon;
+BlynkTimer timer;
+  int Relay1 = 2;     //Pin connection for Socket1
+  int Relay2 = 19;     //Pin connection for Socket2
+  int Relay3 = 18;     //Pin Connection for Socket3
+  int VirtualSwitch = 4;     //Pin Connection for Socket3
+  int ShuntSwitch = 14;  //Pin Connection for Shunt Switch
+// You should get Auth Token in the Blynk App.
+// Go to the Project Settings (nut icon).
+char auth[] = "TddgKQIs8EpwijO709FSvwqsvtJRqpgy";
+ 
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "teamzik";
+char pass[] = "teamzikconnect";
+float kWh = 0;
+unsigned long lastmillis = millis();
+ 
+void myTimerEvent() {
+    emon.calcVI(200, 1000);
+    Serial.print("Vrms: ");
+    Serial.print(emon.Vrms, 2);
+    Serial.print("V");
+    lcd.backlight();
+    lcd.setCursor(0,0);
+    lcd.print("VOLTAGE(V) = ");
+    lcd.print(emon.Vrms);
+    Blynk.virtualWrite(V0, emon.Vrms);
+    Serial.print("\tIrms: ");
+    Serial.print(emon.Irms, 4);
+    Serial.print("A");
+    lcd.backlight();
+    lcd.setCursor(0,1);
+    lcd.print("CURRENT(A) = ");
+    lcd.print(emon.Irms);
+    Blynk.virtualWrite(V1, emon.Irms);
+    Serial.print("\tPower: ");
+    Serial.print(emon.apparentPower, 4);
+    Serial.print("W");
+    lcd.backlight();
+    lcd.setCursor(0,2);
+    lcd.print("POWER(W) = ");
+    lcd.print(emon.apparentPower);
+    Blynk.virtualWrite(V2, emon.apparentPower);
+    Serial.print("\tkWh: ");
+    kWh = kWh + emon.apparentPower*(millis()-lastmillis)/3600000000.0;
+    Serial.print(kWh, 4);
+    Serial.println("kWh");
+    lcd.backlight();
+    lcd.setCursor(0,3);
+    lcd.print("ENERGY(KWh) = ");
+    lcd.print(kWh);
+    lastmillis = millis();
+    Blynk.virtualWrite(V3, kWh);
+        }
+ BLYNK_WRITE(V4)
+    {
+        int Lamp = param.asInt();
+        if (Lamp == 0) //mean LOW
+        {
+            lcd.clear();
+            esp_deep_sleep_start();
+            Serial.println("The System is Off!");
+                         }
+                                 }
+void setup() {
+  //Code to Intialize pins and setup serial communication
+  Serial.begin(9600);
+  pinMode(Relay1, OUTPUT);
+  pinMode(Relay2, OUTPUT);
+  pinMode(Relay3, OUTPUT);
+  pinMode(ShuntSwitch, OUTPUT);
+  digitalWrite(Relay1,LOW);
+  digitalWrite(Relay2,LOW);
+  digitalWrite(Relay3,LOW);
+  Serial.print("Starting Module"); 
+  // Code to initialize the lcd 
+  lcd.init();                      
+  lcd.backlight();
+  lcd.setCursor(2,0);
+  lcd.print("Energy Management");
+  lcd.setCursor(7,1);
+  lcd.print("System");
+  lcd.setCursor(1,2);
+  lcd.print("Designed by TeamZIk");
+  lcd.setCursor(7,3);
+  lcd.print("UNIZIK");
+  Serial.print("working");
+  delay(2000);
+  lcd.clear();
+  emon.voltage(35, vCalibration, 1.7); // Voltage: input pin, calibration, phase_shift
+  emon.current(34, currCalibration); // Current: input pin, calibration.
+  Blynk.begin(auth, ssid, pass);
+  timer.setInterval(5000L, myTimerEvent); 
+  lcd.setCursor(2,1);
+  lcd.print("Waiting for Data");
+  Serial.print("Still working");
+  lcd.clear();
+}
+void loop() {
+  Blynk.run();
